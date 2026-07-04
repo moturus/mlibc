@@ -1,5 +1,6 @@
 #include <array>
 #include <dirent.h>
+#include <mlibc/sysconfdir.hpp>
 #include <errno.h>
 #include <limits.h>
 #include <optional>
@@ -1429,7 +1430,7 @@ namespace {
 
 	bool user_shell_open_global_file() {
 		if(!user_shell_global_file) {
-			user_shell_global_file = fopen("/etc/shells", "r");
+			user_shell_global_file = fopen(MLIBC_SYSCONFDIR "/shells", "r");
 			if(!user_shell_global_file) {
 				// if the file cannot be opened, we need to pretend one exists with
 				// these shells:

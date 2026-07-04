@@ -1,0 +1,123 @@
+diff --git a/include/frg/formatting.hpp b/include/frg/formatting.hpp
+index a5de22c..b8ba06d 100644
+--- a/include/frg/formatting.hpp
++++ b/include/frg/formatting.hpp
+@@ -483,36 +483,73 @@ namespace _fmt_basics {
+ 			return;
+ 		}
+ 
++		// Exact powers of 10 in extended precision: 10^k = 2^k * 5^k and
++		// 5^27 < 2^63, so k <= 27 is exactly representable; larger values
++		// compose with one rounding (2^-64 relative) per 27 decades. Doing
++		// the digit arithmetic below in `long double` instead of `double`
++		// keeps the error far below the last printed digit for precisions
++		// up to 17-19 (double round-trip territory).
++		auto pow10l = [](int e) -> long double {
++			static constexpr long double tab[] = {
++			    1e0L,  1e1L,  1e2L,  1e3L,  1e4L,  1e5L,  1e6L,  1e7L,  1e8L,
++			    1e9L,  1e10L, 1e11L, 1e12L, 1e13L, 1e14L, 1e15L, 1e16L, 1e17L,
++			    1e18L, 1e19L, 1e20L, 1e21L, 1e22L, 1e23L, 1e24L, 1e25L, 1e26L,
++			    1e27L,
++			};
++			bool neg = e < 0;
++			unsigned int m = neg ? (unsigned int)-(long long)e : (unsigned int)e;
++			long double r = 1.0L;
++			while (m >= 27) {
++				r *= tab[27];
++				m -= 27;
++				if (__builtin_isinf(r))
++					break;
++			}
++			r *= tab[m];
++			return neg ? 1.0L / r : r;
++		};
++
+ 		// declare the variables here, but defer initialization to when (if) we need it.
+ 		bool exp_mantissa_init = false;
+ 		int exponent;
+-		double mantissa;
++		long double mantissa;
+ 
+ 		// defer floating-point calculations for as long as possible
+ 		auto deferredMantissaExpInit = [&] () {
+ 			if (number == 0.0) {
+-				mantissa = 0.0;
++				mantissa = 0.0L;
+ 				exponent = 0;
+ 				exp_mantissa_init = true;
+ 				return;
+ 			}
+ 
+ 			exponent = (int) floor(log10(number));
+-			mantissa = number / pow(10, exponent);
++			mantissa = (long double)number / pow10l(exponent);
+ 
+ 			if (__builtin_isinf(mantissa)) {
+-				mantissa = 0.0;
++				mantissa = 0.0L;
+ 				exponent = 0;
+ 				exp_mantissa_init = true;
+ 				return;
+ 			}
+ 
+-			while (mantissa >= 10.0) {
+-				mantissa /= 10.0;
++			while (mantissa >= 10.0L) {
++				mantissa /= 10.0L;
+ 				exponent++;
+ 
+-				if (mantissa < 1.0) {
+-					mantissa = 1.0;
++				if (mantissa < 1.0L) {
++					mantissa = 1.0L;
++					break;
++				}
++			}
++			// log10 rounding can also under-estimate by one (e.g. exactly
++			// representable powers of ten): fix up the other direction too.
++			while (mantissa < 1.0L && mantissa > 0.0L) {
++				mantissa *= 10.0L;
++				exponent--;
++
++				if (mantissa >= 10.0L) {
++					mantissa = 1.0L;
+ 					break;
+ 				}
+ 			}
+@@ -532,23 +569,26 @@ namespace _fmt_basics {
+ 			}
+ 		}
+ 
++		// Digit extraction happens in extended precision: `work` carries the
++		// (possibly 10^exp-scaled) value without a round-trip through T.
++		long double work = (long double)number;
+ 		if (exponential_form) {
+ 			if (!exp_mantissa_init)
+ 				deferredMantissaExpInit();
+ 
+-			number = mantissa;
++			work = mantissa;
+ 		}
+ 
+ 		// do rounding
+-		double intpart, fracpart;
+-		fracpart = modf(number, &intpart);
+-		uint64_t integralDigits = static_cast<uint64_t>(intpart);
+-		// TODO: improve perf with a lookup table? precision would need clamping then
+-		double shift = pow(10, *precision);
+-		// safe because we ensure above that `number` (and therefore `fracpart`) are non-negative
+-		uint64_t fracDigits = static_cast<uint64_t>(rint(fracpart * shift));
+-
+-		if (fracDigits == shift) {
++		// safe because we ensure above that `work` is non-negative
++		uint64_t integralDigits = static_cast<uint64_t>(work);
++		long double fracpart = work - (long double)integralDigits;
++		long double shift = pow10l(*precision);
++		// Round half-up (not half-even): ties are already beyond this
++		// scheme's precision, and this avoids depending on rintl().
++		uint64_t fracDigits = static_cast<uint64_t>(fracpart * shift + 0.5L);
++
++		if ((long double)fracDigits >= shift) {
+ 			integralDigits++;
+ 			fracDigits = 0;
+ 		}

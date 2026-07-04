@@ -1,12 +1,13 @@
 #include <mlibc/resolv_conf.hpp>
 #include <mlibc/allocator.hpp>
+#include <mlibc/sysconfdir.hpp>
 #include <stdio.h>
 #include <ctype.h>
 
 namespace mlibc {
 
 frg::optional<struct nameserver_data> get_nameserver() {
-	auto file = fopen("/etc/resolv.conf", "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/resolv.conf", "r");
 	if (!file)
 		return frg::null_opt;
 

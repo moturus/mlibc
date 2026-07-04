@@ -1,3 +1,7 @@
 [wrap-git]
 url = https://github.com/managarm/frigg.git
 revision = b0dbea66bc19f7c5546f0039a3be842feb02678c
+; motor: print_float digit extraction in long double so %.17g round-trips
+; (docs/porting-libc-appendix-h.md in the motor-os repo, M7 pitfalls).
+; The change should eventually go upstream to frigg.
+diff_files = frigg-print-float-long-double.patch

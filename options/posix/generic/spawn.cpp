@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 
 #include <bits/ensure.h>
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
 
 /*
@@ -192,6 +193,16 @@ int posix_spawn(pid_t *__restrict res, const char *__restrict path,
 		const posix_spawn_file_actions_t *file_actions,
 		const posix_spawnattr_t *__restrict attrs,
 		char *const argv[], char *const envp[]) {
+	// Fork-less platforms spawn natively; the sysdep gets flags telling it
+	// whether non-trivial file_actions/attrs were requested (it returns
+	// ENOSYS if it cannot honor them).
+	if constexpr (mlibc::IsImplemented<PosixSpawn>) {
+		int have_fa = file_actions && file_actions->__actions;
+		int have_attr = attrs && attrs->__flags;
+		return mlibc::sysdep<PosixSpawn>(res, path, have_fa, have_attr,
+				argv, envp);
+	}
+
 	pid_t pid;
 	int ec = 0, cs;
 	struct args args;

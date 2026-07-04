@@ -7,6 +7,7 @@
 #include <bits/ensure.h>
 
 #include <mlibc/all-sysdeps.hpp>
+#include <mlibc/sysconfdir.hpp>
 #include <mlibc/debug.hpp>
 
 namespace {
@@ -14,7 +15,7 @@ namespace {
 
 	bool open_global_file() {
 		if(!global_file) {
-			global_file = fopen("/etc/group", "r");
+			global_file = fopen(MLIBC_SYSCONFDIR "/group", "r");
 			if(!global_file) {
 				errno = EIO;
 				return false;
@@ -115,7 +116,7 @@ namespace {
 
 	template<typename C>
 	int walk_file(struct group *entry, C cond) {
-		auto file = fopen("/etc/group", "r");
+		auto file = fopen(MLIBC_SYSCONFDIR "/group", "r");
 		if(!file) {
 			return EIO;
 		}

@@ -16,7 +16,13 @@ extern "C" {
 #endif
 
 #if defined(_DEFAULT_SOURCE) || (defined(__MLIBC_XOPEN) && __MLIBC_XOPEN < 800)
+/* Default directory for temporary files. Motor OS has no /tmp; its
+ * convention is /sys/tmp (see the Motor porting guide, appendix J). */
+#ifdef __motor__
+#define P_tmpdir "/sys/tmp"
+#else
 #define P_tmpdir "/tmp"
+#endif
 
 char *tempnam(const char *__dir, const char *__pfx);
 #endif /* defined(_DEFAULT_SOURCE) || (defined(__MLIBC_XOPEN) && __MLIBC_XOPEN < 800) */

@@ -626,27 +626,43 @@ int fd_file::parse_modestring(const char *mode) {
 } // namespace mlibc
 
 namespace {
-	mlibc::fd_file stdin_file{0};
-	mlibc::fd_file stdout_file{1};
-	mlibc::fd_file stderr_file{2, nullptr, true};
-
-	struct stdio_guard {
-		stdio_guard() { }
-
-		~stdio_guard() {
-			// Only flush the files but do not close them.
-			for(auto it : mlibc::global_file_list()) {
-				if(int e = it->flush(); e && !mlibc::processIsExiting.load(std::memory_order_relaxed))
-					mlibc::infoLogger() << "mlibc warning: Failed to flush file before exit()"
-							<< frg::endlog;
-			}
-		}
-	} global_stdio_guard;
+	// The std streams and the exit flush must NOT be ordinary statics with
+	// C++ destructors: in a fully static link the executable's TU
+	// constructors can run BEFORE libc's (init_array follows link order), so
+	// LIFO __cxa_finalize would destroy stdio before user destructors that
+	// still print. The union wrapper suppresses the destructor (no
+	// __cxa_atexit registration); the exit-time flush runs explicitly from
+	// __mlibc_do_finalize AFTER all user destructors (glibc _IO_cleanup
+	// semantics). A union rather than frg::eternal because &stdin_file.file
+	// must be an address constant: the FILE *stdin/stdout/stderr globals
+	// below have to be statically initialized (load-time relocation), as
+	// TUs whose constructors run before this one (e.g. libc++'s iostream
+	// init in a static link) already read them.
+	union eternal_file {
+		mlibc::fd_file file;
+		eternal_file(int fd) : file{fd} {}
+		eternal_file(int fd, void (*do_dispose)(mlibc::abstract_file *), bool force_unbuffered)
+		: file{fd, do_dispose, force_unbuffered} {}
+		~eternal_file() {}
+	};
+	eternal_file stdin_file{0};
+	eternal_file stdout_file{1};
+	eternal_file stderr_file{2, nullptr, true};
 } // namespace
 
-FILE *stderr = &stderr_file;
-FILE *stdin = &stdin_file;
-FILE *stdout = &stdout_file;
+// Called from __mlibc_do_finalize() after __dlapi_exit().
+extern "C" void __mlibc_flush_all_files() {
+	// Only flush the files but do not close them.
+	for(auto it : mlibc::global_file_list()) {
+		if(int e = it->flush(); e && !mlibc::processIsExiting.load(std::memory_order_relaxed))
+			mlibc::infoLogger() << "mlibc warning: Failed to flush file before exit()"
+					<< frg::endlog;
+	}
+}
+
+FILE *stderr = &stderr_file.file;
+FILE *stdin = &stdin_file.file;
+FILE *stdout = &stdout_file.file;
 
 int fileno_unlocked(FILE *file_base) {
 	auto file = static_cast<mlibc::fd_file *>(file_base);
