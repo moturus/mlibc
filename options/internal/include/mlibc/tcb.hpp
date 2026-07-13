@@ -144,6 +144,14 @@ struct Tcb {
 	void *stackAddr;
 	size_t guardSize;
 
+	// Opaque per-thread handle for sysdeps whose join must wait on a kernel
+	// object instead of the generic didExit futex. It exists because on some
+	// targets (Motor OS) part of thread teardown — the C++ thread_local /
+	// __cxa_thread_atexit destructors — runs after didExit is signaled, so a
+	// didExit-based join would return too early and race those destructors.
+	// Set by the Clone sysdep; consumed by the ThreadJoin sysdep. 0 if unused.
+	uint64_t sysdepThreadHandle;
+
 	inline void invokeThreadFunc(void *entry, void *user_arg) {
 		if(returnValueType == TcbThreadReturnValue::Pointer) {
 			auto func = reinterpret_cast<void *(*)(void *)>(entry);

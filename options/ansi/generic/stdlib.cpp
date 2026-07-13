@@ -245,12 +245,48 @@ int system(const char *command) {
 	int status = -1;
 	pid_t child;
 
-	MLIBC_CHECK_OR_ENOSYS(mlibc::IsImplemented<Fork> && mlibc::IsImplemented<Waitpid> &&
-			mlibc::IsImplemented<Execve> && mlibc::IsImplemented<Sigprocmask> && mlibc::IsImplemented<Sigaction>, -1);
-
 	if (!command) {
+		// system(NULL) asks "is a shell available?" (POSIX): that needs
+		// either fork/exec or a native spawn, so answer "no" quietly — this
+		// probe is not an error and must not trip the missing-sysdep banner.
+		if (!((mlibc::IsImplemented<Fork> && mlibc::IsImplemented<Execve>
+		       && mlibc::IsImplemented<Waitpid>)
+		      || (mlibc::IsImplemented<PosixSpawn>
+		          && mlibc::IsImplemented<Waitpid>)))
+			return 0;
 		return 1;
 	}
+
+	// Fork-less platforms with a native spawn: run the shell via
+	// posix_spawn. No SIGINT/SIGQUIT juggling — such platforms don't
+	// deliver signals asynchronously in the first place.
+	if constexpr (mlibc::IsImplemented<PosixSpawn> && mlibc::IsImplemented<Waitpid>
+	              && !mlibc::IsImplemented<Fork>) {
+#ifdef __motor__
+		// Motor's /bin/sh is the interactive-login stub; the real shell
+		// binary is /bin/rush (supports -c). See porting guide, J.10.
+		const char *shell = "/bin/rush";
+#else
+		const char *shell = "/bin/sh";
+#endif
+		const char *args[] = {
+			"sh", "-c", "--", command, nullptr
+		};
+		if (int e = mlibc::sysdep<PosixSpawn>(&child, shell, 0, 0,
+				const_cast<char **>(args), environ); e) {
+			errno = e;
+			return -1;
+		}
+		pid_t unused;
+		if (int e = mlibc::sysdep<Waitpid>(child, &status, 0, nullptr, &unused); e) {
+			errno = e;
+			return -1;
+		}
+		return status;
+	}
+
+	MLIBC_CHECK_OR_ENOSYS(mlibc::IsImplemented<Fork> && mlibc::IsImplemented<Waitpid> &&
+			mlibc::IsImplemented<Execve> && mlibc::IsImplemented<Sigprocmask> && mlibc::IsImplemented<Sigaction>, -1);
 
 	struct sigaction new_sa, old_int, old_quit;
 	sigset_t new_mask, old_mask;

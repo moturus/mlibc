@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <mlibc/sysconfdir.hpp>
 #include <limits.h>
 #include <wchar.h>
 #include <stdlib.h>
@@ -442,8 +443,8 @@ frg::string<MemoryAllocator> parse_tzfile_path(const char *tz) {
 		// FIXME: Figure out what we actually need to do in this case, consider
 		//        supporting relative paths or defaulting to UTC instead.
 		mlibc::infoLogger() << "mlibc: relative path in TZ not supported, "
-			"defaulting to /etc/localtime" << frg::endlog;
-		path += "/etc/localtime";
+			"defaulting to " MLIBC_SYSCONFDIR "/localtime" << frg::endlog;
+		path += MLIBC_SYSCONFDIR "/localtime";
 	} else {
 		const char *tzdir = getenv("TZDIR");
 		if (tzdir == nullptr || *tzdir == '\0') {
@@ -546,7 +547,7 @@ bool parse_tzfile(const char *tz) {
 void do_tzset(void) {
 	const char *tz = getenv("TZ");
 	if (tz == nullptr)
-		tz = "/etc/localtime";
+		tz = MLIBC_SYSCONFDIR "/localtime";
 	if (*tz == '\0')
 		tz = "UTC0";
 
@@ -791,7 +792,7 @@ int unix_local_from_gmt_tzfile(time_t unix_gmt, time_t *offset, bool *dst, frg::
 	const char *tz = getenv("TZ");
 
 	if (!tz || *tz == '\0')
-		tz = "/etc/localtime";
+		tz = MLIBC_SYSCONFDIR "/localtime";
 
 	frg::string<MemoryAllocator> path = parse_tzfile_path(tz);
 
@@ -945,7 +946,7 @@ struct tm *localtime_r(const time_t *unix_gmt, struct tm *res) {
 	frg::unique_lock<FutexLock> lock(__time_lock);
 	// TODO: Set errno if the conversion fails.
 	if(unix_local_from_gmt(*unix_gmt, &offset, &dst, &tm_zone)) {
-		__ensure(!"Error parsing /etc/localtime");
+		__ensure(!"Error parsing " MLIBC_SYSCONFDIR "/localtime");
 		__builtin_unreachable();
 	}
 	time_t unix_local = *unix_gmt + offset;

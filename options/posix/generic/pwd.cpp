@@ -6,13 +6,14 @@
 #include <bits/ensure.h>
 
 #include <mlibc/debug.hpp>
+#include <mlibc/sysconfdir.hpp>
 
 namespace {
 	FILE *global_file; // Used by setpwent/getpwent/endpwent.
 
 	bool open_global_file() {
 		if(!global_file) {
-			global_file = fopen("/etc/passwd", "r");
+			global_file = fopen(MLIBC_SYSCONFDIR "/passwd", "r");
 			if(!global_file) {
 				errno = EIO;
 				return false;
@@ -143,7 +144,7 @@ struct passwd *getpwent(void) {
 
 struct passwd *getpwnam(const char *name) {
 	static passwd entry;
-	auto file = fopen("/etc/passwd", "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/passwd", "r");
 	if(!file)
 		return nullptr;
 
@@ -170,7 +171,7 @@ struct passwd *getpwnam(const char *name) {
 
 int getpwnam_r(const char *name, struct passwd *pwd, char *buffer, size_t size, struct passwd **result) {
 	*result = nullptr;
-	auto file = fopen("/etc/passwd", "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/passwd", "r");
 	if(!file) {
 		return EIO;
 	}
@@ -204,7 +205,7 @@ int getpwnam_r(const char *name, struct passwd *pwd, char *buffer, size_t size, 
 
 struct passwd *getpwuid(uid_t uid) {
 	static passwd entry;
-	auto file = fopen("/etc/passwd", "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/passwd", "r");
 	if(!file)
 		return nullptr;
 
@@ -231,7 +232,7 @@ struct passwd *getpwuid(uid_t uid) {
 
 int getpwuid_r(uid_t uid, struct passwd *pwd, char *buffer, size_t size, struct passwd **result) {
 	*result = nullptr;
-	auto file = fopen("/etc/passwd", "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/passwd", "r");
 	if(!file) {
 		return EIO;
 	}

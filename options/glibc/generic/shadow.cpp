@@ -10,6 +10,7 @@
 #include <bits/ensure.h>
 #include <frg/vector.hpp>
 #include <mlibc/allocator.hpp>
+#include <mlibc/sysconfdir.hpp>
 #include <mlibc/debug.hpp>
 
 /*
@@ -129,7 +130,7 @@ int getspnam_r(const char *name, struct spwd *sp, char *buf, size_t size, struct
 	}
 
 	/* Protect against truncation */
-	if(snprintf(path, sizeof path, "/etc/tcb/%s/shadow", name) >= (int)sizeof path) {
+	if(snprintf(path, sizeof path, MLIBC_SYSCONFDIR "/tcb/%s/shadow", name) >= (int)sizeof path) {
 		return errno = EINVAL;
 	}
 
@@ -147,7 +148,7 @@ int getspnam_r(const char *name, struct spwd *sp, char *buf, size_t size, struct
 		if(errno != ENOENT && errno != ENOTDIR) {
 			return errno;
 		}
-		f = fopen("/etc/shadow", "rbe");
+		f = fopen(MLIBC_SYSCONFDIR "/shadow", "rbe");
 		if(!f) {
 			if(errno != ENOENT && errno != ENOTDIR) {
 				return errno;

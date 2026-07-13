@@ -84,7 +84,17 @@ SYSDEP_FUNC(FdToPath, int fd, char **out);
 SYSDEP_FUNC(Sigprocmask, int how, const sigset_t *__restrict set, sigset_t *__restrict retrieve);
 SYSDEP_FUNC(Sigaction, int, const struct sigaction *__restrict, struct sigaction *__restrict);
 SYSDEP_FUNC(Fork, pid_t *child);
+// For fork-less platforms that spawn natively (posix_spawn semantics; the
+// generic posix_spawn/system use this when implemented instead of fork+exec).
+// have_file_actions/have_attr flag non-trivial file_actions/attrp that the
+// sysdep may not support (return ENOSYS then).
+SYSDEP_FUNC(PosixSpawn, pid_t *ret_pid, const char *path, int have_file_actions,
+		int have_attr, char *const argv[], char *const envp[]);
 SYSDEP_FUNC(Waitpid, pid_t pid, int *status, int flags, struct rusage *ru, pid_t *ret_pid);
+// Blocks until the joined thread is fully torn down (including thread-exit
+// destructors that the generic path runs after didExit). Handle comes from
+// Tcb::sysdepThreadHandle, set by Clone.
+SYSDEP_FUNC(ThreadJoin, uint64_t handle);
 SYSDEP_FUNC(Execve, const char *path, char *const argv[], char *const envp[]);
 SYSDEP_FUNC_RET(void, Yield);
 SYSDEP_FUNC_RET(pid_t, GetPid);

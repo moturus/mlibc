@@ -90,8 +90,11 @@ struct Sigaction {};
 
 // int sys_fork(pid_t *child);
 struct Fork {};
+struct PosixSpawn {};
 // int sys_waitpid(pid_t pid, int *status, int flags, struct rusage *ru, pid_t *ret_pid);
 struct Waitpid {};
+// int sys_thread_join(uint64_t handle); // wait for full teardown via a kernel handle
+struct ThreadJoin {};
 // int sys_execve(const char *path, char *const argv[], char *const envp[]);
 struct Execve {};
 // void sys_yield();

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <bits/ensure.h>
+#include <mlibc-config.h>
 #include <mlibc/allocator.hpp>
 
 #include <frg/eternal.hpp>
@@ -37,6 +38,9 @@ extern "C" int __cxa_atexit(void (*function)(void *), void *argument, void *hand
 }
 
 extern "C" void __dlapi_exit();
+#if __MLIBC_POSIX_OPTION
+extern "C" void __mlibc_flush_all_files(); // options/ansi/generic/file-io.cpp
+#endif
 
 extern "C" void __cxa_finalize(void *dso) {
 	ExitQueue &eq = getExitQueue();
@@ -46,7 +50,7 @@ extern "C" void __cxa_finalize(void *dso) {
 			continue;
 
 		if (!dso || handler.dsoHandle == dso) {
-			handler.function(handler.argument);
+					handler.function(handler.argument);
 			handler.function = nullptr;
 		}
 	}
@@ -80,7 +84,7 @@ void __mlibc_do_finalize() {
 			continue;
 
 		if (!handler.dsoHandle) {
-			handler.function(handler.argument);
+					handler.function(handler.argument);
 			handler.function = nullptr;
 		}
 	}
@@ -89,4 +93,11 @@ void __mlibc_do_finalize() {
 	// to implement [[gnu::destructor]]. Note that C++ applications will call
 	// __cxa_finalize from here.
 	__dlapi_exit();
+
+	// Flush (but do not destroy) all open FILEs, strictly after every user
+	// destructor has run -- see the std-stream immortalization in
+	// options/ansi/generic/file-io.cpp.
+#if __MLIBC_POSIX_OPTION /* implies the ansi option, where the flush hook lives */
+	__mlibc_flush_all_files();
+#endif
 }

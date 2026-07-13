@@ -1,4 +1,5 @@
 #include <mlibc/services.hpp>
+#include <mlibc/sysconfdir.hpp>
 #include <netdb.h>
 #include <stdio.h>
 #include <errno.h>
@@ -32,7 +33,7 @@ static int parse_rest(service_buf &buf, char *end, int proto) {
 }
 
 static int lookup_serv_file_port(service_result &buf, int proto, int port) {
-	auto file = fopen(_PATH_SERVICES, "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/services", "r");
 	if (!file) {
 		switch (errno) {
 			case ENOENT:
@@ -96,7 +97,7 @@ static int lookup_serv_file_port(service_result &buf, int proto, int port) {
 
 static int lookup_serv_file_name(service_result &buf, const char *name,
 		int proto) {
-	auto file = fopen(_PATH_SERVICES, "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/services", "r");
 	if (!file) {
 		switch (errno) {
 			case ENOENT:

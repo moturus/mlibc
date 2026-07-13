@@ -2,6 +2,7 @@
 #include <bits/ensure.h>
 
 #include <mlibc/all-sysdeps.hpp>
+#include <mlibc/sysconfdir.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/lookup.hpp>
 #include <mlibc/allocator.hpp>
@@ -31,7 +32,7 @@ void openProtoFd(int stayopen) {
 	}
 
 	int fd = -1;
-	auto e = mlibc::sysdep<Open>("/etc/protocols", O_RDONLY | O_CLOEXEC, 0, &fd);
+	auto e = mlibc::sysdep<Open>(MLIBC_SYSCONFDIR "/protocols", O_RDONLY | O_CLOEXEC, 0, &fd);
 	if (e == 0) {
 		protoFd = fd;
 		protoFdStayopen = stayopen;

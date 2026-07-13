@@ -1,4 +1,5 @@
 #include <mlibc/lookup.hpp>
+#include <mlibc/sysconfdir.hpp>
 #include <mlibc/resolv_conf.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/services.hpp>
@@ -398,7 +399,7 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 
 int lookup_name_hosts(struct lookup_result &buf, const char *name,
 		frg::string<MemoryAllocator> &canon_name, int family) {
-	auto file = fopen("/etc/hosts", "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/hosts", "r");
 	if (!file) {
 		switch (errno) {
 			case ENOENT:
@@ -465,7 +466,7 @@ int lookup_name_hosts(struct lookup_result &buf, const char *name,
 }
 
 int lookup_addr_hosts(frg::span<char> name, frg::array<uint8_t, 16> &addr, int family) {
-	auto file = fopen("/etc/hosts", "r");
+	auto file = fopen(MLIBC_SYSCONFDIR "/hosts", "r");
 	if (!file) {
 		switch (errno) {
 			case ENOENT:

@@ -132,9 +132,20 @@ int thread_join(struct __mlibc_thread_data *thread, void *ret) {
 
 	mlibc::thread_testcancel();
 
-	while (!__atomic_load_n(&tcb->didExit, __ATOMIC_ACQUIRE)) {
-		if (int e = sysdep<FutexWait>(&tcb->didExit, 0, nullptr); e == EINTR)
-			mlibc::thread_testcancel();
+	if constexpr (IsImplemented<ThreadJoin>) {
+		// On some targets part of thread teardown (C++ thread_local /
+		// __cxa_thread_atexit destructors) runs AFTER the didExit signal, so a
+		// didExit-based join would return too early and race those destructors.
+		// Delegate the wait to the sysdep, which blocks until the thread is
+		// fully gone. returnValue is set before didExit, so it is already valid.
+		uint64_t handle = __atomic_load_n(&tcb->sysdepThreadHandle, __ATOMIC_ACQUIRE);
+		if (int e = mlibc::sysdep<ThreadJoin>(handle); e)
+			return e;
+	} else {
+		while (!__atomic_load_n(&tcb->didExit, __ATOMIC_ACQUIRE)) {
+			if (int e = sysdep<FutexWait>(&tcb->didExit, 0, nullptr); e == EINTR)
+				mlibc::thread_testcancel();
+		}
 	}
 
 	if(ret && tcb->returnValueType == TcbThreadReturnValue::Pointer)
