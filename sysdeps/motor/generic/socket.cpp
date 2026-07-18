@@ -113,14 +113,20 @@ void moto_to_lx_addr(const moto_sockaddr_t *m, struct sockaddr *addr, socklen_t 
 	}
 }
 
-// Caller holds psock_lock. Auto-bind an unbound UDP socket to the any-address
-// with an ephemeral port (POSIX auto-bind semantics).
-int materialize_udp(PseudoSocket *ps) {
+// Caller holds psock_lock. Auto-bind an unbound UDP socket with an ephemeral
+// port. If a destination is known, let sys-io select the route and concrete
+// source address; otherwise retain the ordinary any-address bind path.
+int materialize_udp(PseudoSocket *ps, const moto_sockaddr_t *remote = nullptr) {
 	__ensure(ps->type == SOCK_DGRAM && ps->real_fd < 0);
-	moto_sockaddr_t any;
-	memset(&any, 0, sizeof(any));
-	any.v4.family = ps->family == AF_INET ? MOTO_AF_INET : MOTO_AF_INET6;
-	int64_t r = moto_rt_net_bind(MOTO_PROTO_UDP, &any);
+	int64_t r;
+	if (remote) {
+		r = moto_rt_net_udp_bind_for_remote(remote);
+	} else {
+		moto_sockaddr_t any;
+		memset(&any, 0, sizeof(any));
+		any.v4.family = ps->family == AF_INET ? MOTO_AF_INET : MOTO_AF_INET6;
+		r = moto_rt_net_bind(MOTO_PROTO_UDP, &any);
+	}
 	if (r < 0)
 		return moto_to_errno(r);
 	ps->real_fd = static_cast<int>(r);
@@ -132,7 +138,9 @@ int materialize_udp(PseudoSocket *ps) {
 
 // Resolve fd for a socket-specific op. Returns 0 and fills *real/*ps_type, or
 // a positive errno. dgram_autobind: bind unbound UDP sockets on first use.
-int resolve_for_io(int fd, int *real, int *ps_type, bool dgram_autobind) {
+int resolve_for_io(int fd, int *real, int *ps_type, bool dgram_autobind,
+		const struct sockaddr *dgram_remote = nullptr,
+		socklen_t dgram_remote_length = 0) {
 	if (fd < MOTOR_PSEUDO_FD_BASE) {
 		*real = fd;
 		*ps_type = SOCK_STREAM; // real fds we hand out are TCP (accept())
@@ -145,7 +153,18 @@ int resolve_for_io(int fd, int *real, int *ps_type, bool dgram_autobind) {
 	*ps_type = ps->type;
 	if (ps->real_fd < 0) {
 		if (ps->type == SOCK_DGRAM && dgram_autobind) {
-			if (int e = materialize_udp(ps))
+			moto_sockaddr_t remote;
+			const moto_sockaddr_t *remote_ptr = nullptr;
+			if (dgram_remote) {
+				if (int e = lx_to_moto_addr(dgram_remote,
+						dgram_remote_length, &remote))
+					return e;
+				if ((ps->family == AF_INET)
+						!= (remote.v4.family == MOTO_AF_INET))
+					return EAFNOSUPPORT;
+				remote_ptr = &remote;
+			}
+			if (int e = materialize_udp(ps, remote_ptr))
 				return e;
 		} else {
 			return ENOTCONN;
@@ -319,7 +338,7 @@ int Sysdeps<Connect>::operator()(int fd, const struct sockaddr *addr_ptr,
 
 	// UDP: auto-bind if fresh, then connect the bound socket.
 	if (ps->real_fd < 0) {
-		if (int e = materialize_udp(ps))
+		if (int e = materialize_udp(ps, &ma))
 			return e;
 	}
 	int32_t r = moto_rt_net_udp_connect(ps->real_fd, &ma);
@@ -422,7 +441,8 @@ int Sysdeps<Sendto>::operator()(int fd, const void *buffer, size_t size, int fla
 		return EINVAL;
 	}
 	int real, type;
-	if (int e = resolve_for_io(fd, &real, &type, /*dgram_autobind=*/true))
+	if (int e = resolve_for_io(fd, &real, &type, /*dgram_autobind=*/true,
+			sock_addr, addr_length))
 		return e;
 
 	int64_t r;
