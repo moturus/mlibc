@@ -50,6 +50,13 @@ namespace {
 	file_list &global_file_list() {
 		return global_file_list_instance.get();
 	};
+
+	// Guards the list itself. Every FILE links itself in on construction and
+	// unlinks on destruction, so two threads in fopen()/fclose() mutate this
+	// list at the same time; abstract_file::_lock covers one file's buffer,
+	// not the list. Without this, concurrent opens and closes corrupt the
+	// links and trip frg::list's assertions.
+	constinit FutexLock global_file_list_mutex{};
 } // namespace
 
 // For pipe-like streams (seek returns ESPIPE), we need to make sure
@@ -72,6 +79,7 @@ abstract_file::abstract_file(void (*do_dispose)(abstract_file *))
 	__io_mode = 0;
 	__status_bits = 0;
 
+	frg::unique_lock list_lock(global_file_list_mutex);
 	global_file_list().push_back(this);
 }
 
@@ -83,6 +91,7 @@ abstract_file::~abstract_file() {
 	if(__buffer_ptr)
 		getAllocator().free(__buffer_ptr - ungetBufferSize);
 
+	frg::unique_lock list_lock(global_file_list_mutex);
 	auto it = global_file_list().iterator_to(this);
 	global_file_list().erase(it);
 }
@@ -653,6 +662,7 @@ namespace {
 // Called from __mlibc_do_finalize() after __dlapi_exit().
 extern "C" void __mlibc_flush_all_files() {
 	// Only flush the files but do not close them.
+	frg::unique_lock list_lock(mlibc::global_file_list_mutex);
 	for(auto it : mlibc::global_file_list()) {
 		if(int e = it->flush(); e && !mlibc::processIsExiting.load(std::memory_order_relaxed))
 			mlibc::infoLogger() << "mlibc warning: Failed to flush file before exit()"
@@ -727,6 +737,7 @@ long ftell(FILE *file_base) {
 int fflush_unlocked(FILE *file_base) {
 	if(file_base == nullptr) {
 		// Only flush the files but do not close them.
+		frg::unique_lock list_lock(mlibc::global_file_list_mutex);
 		for(auto it : mlibc::global_file_list()) {
 			if(int e = it->flush(); e)
 				mlibc::infoLogger() << "mlibc warning: Failed to flush file"
@@ -742,6 +753,7 @@ int fflush_unlocked(FILE *file_base) {
 int fflush(FILE *file_base) {
 	if(file_base == nullptr) {
 		// Only flush the files but do not close them.
+		frg::unique_lock list_lock(mlibc::global_file_list_mutex);
 		for(auto it : mlibc::global_file_list()) {
 			frg::unique_lock lock(it->_lock);
 			if(int e = it->flush(); e)
