@@ -17,6 +17,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 
 namespace {
@@ -231,6 +232,21 @@ int motor_sock_close(int fd) {
 	guard.unlock();
 	if (real >= 0)
 		return moto_to_errno(moto_rt_close(real));
+	return 0;
+}
+
+int motor_sock_fstat(int fd, struct stat *result) {
+	if (fd < MOTOR_PSEUDO_FD_BASE)
+		return -1;
+	frg::unique_lock guard{psock_lock};
+	if (!psock_get(fd))
+		return EBADF;
+	memset(result, 0, sizeof(*result));
+	result->st_dev = 3;
+	result->st_ino = static_cast<ino_t>(fd - MOTOR_PSEUDO_FD_BASE + 1);
+	result->st_mode = S_IFSOCK | 0600;
+	result->st_nlink = 1;
+	result->st_blksize = 4096;
 	return 0;
 }
 

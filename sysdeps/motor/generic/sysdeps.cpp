@@ -32,23 +32,52 @@ static_assert(sizeof(moto_dir_entry_t) == 384); // v2
 // "deleted". The high u64 (generation, an ABA guard) has no stat field and
 // is dropped. Same-file detection via (st_dev, st_ino) works since v2;
 // clang's FileManager was the first real consumer (appendix J pitfalls).
-void attr_to_stat(const moto_file_attr_t *a, struct stat *st) {
+int attr_to_stat(const moto_file_attr_t *a, struct stat *st) {
 	memset(st, 0, sizeof(*st));
+	st->st_nlink = 1;
+	st->st_blksize = 4096;
+
+	mode_t mode = 0;
+	switch (a->file_type) {
+	case MOTO_FILETYPE_FILE:
+		mode = S_IFREG;
+		break;
+	case MOTO_FILETYPE_DIRECTORY:
+		mode = S_IFDIR | 0111; // directories are traversable
+		break;
+	case MOTO_FILETYPE_CHARACTER_DEVICE:
+		mode = S_IFCHR | 0600;
+		break;
+	case MOTO_FILETYPE_FIFO:
+		mode = S_IFIFO | 0600;
+		break;
+	case MOTO_FILETYPE_SOCKET:
+		mode = S_IFSOCK | 0600;
+		break;
+	case MOTO_FILETYPE_ANONYMOUS:
+		mode = 0600;
+		break;
+	default:
+		return EIO;
+	}
+
+	if (a->file_type >= MOTO_FILETYPE_CHARACTER_DEVICE) {
+		if (!a->entry_id_lo || a->entry_id_hi)
+			return EIO;
+		st->st_dev = 2;
+		st->st_ino = static_cast<ino_t>(a->entry_id_lo);
+		st->st_mode = mode;
+		return 0;
+	}
+
 	st->st_dev = 1;
 	st->st_ino = static_cast<ino_t>(a->entry_id_lo + 1);
-	st->st_nlink = 1;
-	mode_t mode;
-	if (a->file_type == MOTO_FILETYPE_DIRECTORY)
-		mode = S_IFDIR | 0111; // directories are traversable
-	else
-		mode = S_IFREG;
 	if (a->perm & MOTO_PERM_READ)
 		mode |= 0444;
 	if (a->perm & MOTO_PERM_WRITE)
 		mode |= 0222;
 	st->st_mode = mode;
 	st->st_size = static_cast<off_t>(a->size);
-	st->st_blksize = 4096;
 	st->st_blocks = static_cast<blkcnt_t>((a->size + 511) / 512);
 	// u128 nanos since the UNIX epoch; the high half is always 0 for
 	// realistic dates (u64 nanos reach the year 2554). 0 stays 0 (unknown).
@@ -61,6 +90,7 @@ void attr_to_stat(const moto_file_attr_t *a, struct stat *st) {
 	st->st_atim = to_ts(a->accessed_lo);
 	st->st_mtim = to_ts(a->modified_lo);
 	st->st_ctim = to_ts(a->modified_lo); // no status-change time on Motor
+	return 0;
 }
 
 } // namespace
@@ -234,19 +264,25 @@ int Sysdeps<Stat>::operator()(fsfd_target fsfdt, int fd, const char *path, int f
 	// AT_SYMLINK_NOFOLLOW is accepted and ignored: Motor has no symlinks,
 	// so follow/nofollow are the same operation.
 	moto_file_attr_t attr;
+	auto stat_fd = [&](int target_fd) {
+		int socket_result = motor_sock_fstat(target_fd, result);
+		if (socket_result != -1)
+			return socket_result;
+		int32_t r = moto_rt_fstat(target_fd, &attr);
+		if (r < 0)
+			return moto_to_errno(r);
+		return attr_to_stat(&attr, result);
+	};
 	int32_t r;
 	switch (fsfdt) {
 	case fsfd_target::fd:
-		r = moto_rt_fstat(fd, &attr);
-		break;
+		return stat_fd(fd);
 	case fsfd_target::path:
 		r = moto_rt_stat(reinterpret_cast<const uint8_t *>(path), strlen(path), &attr);
 		break;
 	case fsfd_target::fd_path:
-		if ((flags & AT_EMPTY_PATH) && !*path) {
-			r = moto_rt_fstat(fd, &attr);
-			break;
-		}
+		if ((flags & AT_EMPTY_PATH) && !*path)
+			return stat_fd(fd);
 		if (fd != AT_FDCWD && path[0] != '/')
 			return EBADF; // no dirfd-relative resolution on Motor
 		r = moto_rt_stat(reinterpret_cast<const uint8_t *>(path), strlen(path), &attr);
@@ -254,24 +290,9 @@ int Sysdeps<Stat>::operator()(fsfd_target fsfdt, int fd, const char *path, int f
 	default:
 		return EINVAL;
 	}
-	if (r < 0) {
-		// fstat on a terminal fd must succeed (POSIX; probed by real
-		// software — e.g. clang's FixupStandardFileDescriptors exits,
-		// silently, if fstat(0/1/2) fails). Motor's fstat only knows
-		// filesystem objects, so synthesize a character-device stat.
-		if (fsfdt == fsfd_target::fd && moto_rt_is_terminal(fd)) {
-			memset(result, 0, sizeof *result);
-			result->st_dev = 2; // tty namespace, distinct from motor-fs (dev 1)
-			result->st_ino = 1; // the one console
-			result->st_mode = S_IFCHR | 0620;
-			result->st_nlink = 1;
-			result->st_blksize = 1024;
-			return 0;
-		}
+	if (r < 0)
 		return moto_to_errno(r);
-	}
-	attr_to_stat(&attr, result);
-	return 0;
+	return attr_to_stat(&attr, result);
 }
 
 int Sysdeps<GetCwd>::operator()(char *buffer, size_t size) {

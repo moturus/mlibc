@@ -1,5 +1,7 @@
 #pragma once
 
+struct stat;
+
 // Pseudo-socket hooks used by generic/sysdeps.cpp (Read/Write/Close) to route
 // BSD-socket fds created by socket() to their materialized Motor fds.
 // Implementation + design: generic/socket.cpp, docs/porting-libc-appendix-g.md.
@@ -17,6 +19,11 @@ int motor_sock_realfd(int fd);
 // normally); otherwise closes the real fd (if any), frees the slot, and
 // returns 0 or a positive errno.
 int motor_sock_close(int fd);
+
+// fstat() hook: returns -1 if fd is not a pseudo-socket; otherwise fills a
+// socket stat without materializing the socket and returns 0 or a positive
+// errno.
+int motor_sock_fstat(int fd, struct stat *result);
 
 // poll() hook: resolve an application fd for readiness registration. Like
 // motor_sock_realfd (auto-binds unbound UDP), but also arms a listening
