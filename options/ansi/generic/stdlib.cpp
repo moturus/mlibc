@@ -263,9 +263,7 @@ int system(const char *command) {
 	if constexpr (mlibc::IsImplemented<PosixSpawn> && mlibc::IsImplemented<Waitpid>
 	              && !mlibc::IsImplemented<Fork>) {
 #ifdef __motor__
-		// Motor's /bin/sh is the interactive-login stub; the real shell
-		// binary is /bin/rush (supports -c). See porting guide, J.10.
-		const char *shell = "/bin/rush";
+		const char *shell = "/system/bin/rush";
 #else
 		const char *shell = "/bin/sh";
 #endif

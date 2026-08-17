@@ -38,7 +38,11 @@
 #include <signal.h>
 #include <stdint.h>
 
+#ifdef __motor__
+#define SHELL_PATH "/system/bin/sh"
+#else
 #define SHELL_PATH "/bin/sh"
+#endif
 #define SHELL_NAME "sh"
 
 static size_t we_read_fully(int fd, char *buffer, size_t len) {

@@ -17,9 +17,9 @@ extern "C" {
 
 #if defined(_DEFAULT_SOURCE) || (defined(__MLIBC_XOPEN) && __MLIBC_XOPEN < 800)
 /* Default directory for temporary files. Motor OS has no /tmp; its
- * convention is /sys/tmp (see the Motor porting guide, appendix J). */
+ * user-facing fallback is /user/tmp. */
 #ifdef __motor__
-#define P_tmpdir "/sys/tmp"
+#define P_tmpdir "/user/tmp"
 #else
 #define P_tmpdir "/tmp"
 #endif
@@ -102,5 +102,4 @@ FILE *fopencookie(void *__restrict __cookie, const char *__restrict __mode, cook
 /* MISSING: various functions and macros */
 
 #endif /* _MLIBC_POSIX_STDIO_H */
-
 

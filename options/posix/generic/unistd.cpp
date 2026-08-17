@@ -66,7 +66,11 @@ int chown(const char *path, uid_t uid, gid_t gid) {
 size_t confstr(int name, char *buf, size_t len) {
 	const char *str = "";
 	if (name == _CS_PATH) {
+#ifdef __motor__
+		str = "/system/bin:/user/bin";
+#else
 		str = "/bin:/usr/bin";
+#endif
 	} else if(name == _CS_GNU_LIBPTHREAD_VERSION) {
 		// We are not glibc, so we can return 0 here.
 		return 0;
@@ -178,7 +182,11 @@ int execvpe(const char *file, char *const argv[], char *const envp[]) {
 	if(const char *pv = getenv("PATH"); pv) {
 		dirs = pv;
 	}else{
+#ifdef __motor__
+		dirs = "/system/bin:/user/bin";
+#else
 		dirs = "/bin:/usr/bin";
+#endif
 	}
 
 	size_t p = 0;
@@ -1434,7 +1442,11 @@ namespace {
 			if(!user_shell_global_file) {
 				// if the file cannot be opened, we need to pretend one exists with
 				// these shells:
+#ifdef __motor__
+				static char shells[] = "/system/bin/sh\n/system/bin/rush\n";
+#else
 				static char shells[] = "/bin/sh\n/bin/csh\n";
+#endif
 
 				user_shell_global_file = fmemopen(shells, strlen(shells), "r");
 				if(user_shell_global_file == nullptr)

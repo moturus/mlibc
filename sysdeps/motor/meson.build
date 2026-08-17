@@ -23,6 +23,10 @@ libc_include_dirs += include_directories('include')
 
 # ANCHOR: abi-includes
 if not no_headers
+	# Motor uses the path constants without enabling mlibc's broader glibc
+	# compatibility option. Install this standalone compatibility header here.
+	install_headers('../../options/glibc/include/paths.h')
+
 	install_headers(
 		'include/abi-bits/auxv.h',
 		'include/abi-bits/blkcnt_t.h',

@@ -4,10 +4,15 @@
 #ifndef _PATHS_H
 #define _PATHS_H
 
+#ifdef __motor__
+#define	_PATH_DEFPATH "/system/bin:/user/bin"
+#define	_PATH_STDPATH "/system/bin:/user/bin"
+#define	_PATH_BSHELL	"/system/bin/sh"
+#else
 #define	_PATH_DEFPATH "/usr/local/bin:/bin:/usr/bin"
 #define	_PATH_STDPATH "/bin:/usr/bin:/sbin:/usr/sbin"
-
 #define	_PATH_BSHELL	"/bin/sh"
+#endif
 #define	_PATH_CONSOLE	"/dev/console"
 #define	_PATH_DEVNULL	"/dev/null"
 #define _PATH_GSHADOW	"/etc/gshadow"
@@ -28,10 +33,18 @@
 #define _PATH_WTMP	"/var/log/wtmp"
 
 #define	_PATH_DEV	"/dev/"
+#ifdef __motor__
+#define	_PATH_TMP	"/user/tmp/"
+#else
 #define	_PATH_TMP	"/tmp/"
+#endif
 #define	_PATH_VARDB	"/var/lib/misc/"
 #define	_PATH_VARRUN	"/var/run/"
+#ifdef __motor__
+#define	_PATH_VARTMP	"/user/tmp/"
+#else
 #define	_PATH_VARTMP	"/var/tmp/"
+#endif
 
 #ifdef _GNU_SOURCE
 #define _PATH_UTMPX _PATH_UTMP

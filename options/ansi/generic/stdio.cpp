@@ -778,15 +778,54 @@ int rename(const char *path, const char *new_path) {
 	return 0;
 }
 
+#ifdef __motor__
+namespace {
+
+struct motor_tmp_file final : mlibc::fd_file {
+	motor_tmp_file(int fd, const char *path)
+	: fd_file{fd, mlibc::file_dispose_cb<motor_tmp_file>} {
+		strcpy(_path, path);
+	}
+
+	int close() override {
+		int close_error = fd_file::close();
+		int unlink_error = mlibc::sysdep<Unlinkat>(AT_FDCWD, _path, 0);
+		return close_error ? close_error : unlink_error;
+	}
+
+private:
+	char _path[L_tmpnam];
+};
+
+} // namespace
+#endif
+
 FILE *tmpfile(void) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::IsImplemented<Unlinkat>, nullptr);
 
 	int fd = 0;
+#ifdef __motor__
+	const char *tmpdir = getenv("TMPDIR");
+	if(!tmpdir)
+		tmpdir = "/user/tmp";
+	char pattern[L_tmpnam];
+	int length = snprintf(pattern, sizeof(pattern), "%s/tmpfile_XXXXXX", tmpdir);
+	if(length < 0 || static_cast<size_t>(length) >= sizeof(pattern)) {
+		errno = ENAMETOOLONG;
+		return nullptr;
+	}
+#else
 	char pattern[] = "/tmp/tmpfile_XXXXXX";
+#endif
 	int res = mlibc::mkostemps(pattern, 0, 0, &fd);
 	if (res)
 		return nullptr;
 
+#ifdef __motor__
+	// Motor does not yet preserve an open file handle after unlinking its
+	// directory entry. Defer removal until fclose(), after stdio flushes it.
+	return frg::construct<motor_tmp_file>(getAllocator(), fd, pattern);
+#else
 	res = mlibc::sysdep_or_panic<Unlinkat>(AT_FDCWD, pattern, 0);
 	if (res) {
 		mlibc::sysdep<Close>(fd);
@@ -795,6 +834,7 @@ FILE *tmpfile(void) {
 	}
 
 	return frg::construct<mlibc::fd_file>(getAllocator(), fd, mlibc::file_dispose_cb<mlibc::fd_file>);
+#endif
 
 }
 
@@ -803,9 +843,18 @@ char *tmpnam(char *buf) {
 	char *result = buf ? buf : internalBuffer;
 
 	for (size_t i = 0; i < 100; i++) {
+#ifdef __motor__
+		const char *tmpdir = getenv("TMPDIR");
+		if(!tmpdir)
+			tmpdir = "/user/tmp";
+		int ret = snprintf(result, L_tmpnam, "%s/tmpnam_%06X", tmpdir, rand() & 0xFFFFFF);
+#else
 		int ret = snprintf(result, L_tmpnam, "/tmp/tmpnam_%06X", rand() & 0xFFFFFF);
-		if (ret < 18)
+#endif
+		if(ret < 0 || ret >= L_tmpnam) {
+			errno = ENAMETOOLONG;
 			return nullptr;
+		}
 
 		int fd;
 		ret = mlibc::sysdep<Open>(result, O_RDONLY, 0666, &fd);
