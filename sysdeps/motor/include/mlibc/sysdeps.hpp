@@ -38,6 +38,7 @@ struct MotorSysdepTags :
 	ReadEntries,
 	Ftruncate,
 	Fsync,
+	Fchmod,
 	Access,
 	Faccessat,
 	PrepareStack,

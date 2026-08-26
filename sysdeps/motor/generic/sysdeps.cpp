@@ -76,6 +76,8 @@ int attr_to_stat(const moto_file_attr_t *a, struct stat *st) {
 		mode |= 0444;
 	if (a->perm & MOTO_PERM_WRITE)
 		mode |= 0222;
+	if (a->perm & MOTO_PERM_EXEC)
+		mode |= 0111;
 	st->st_mode = mode;
 	st->st_size = static_cast<off_t>(a->size);
 	st->st_blocks = static_cast<blkcnt_t>((a->size + 511) / 512);
@@ -377,6 +379,17 @@ int Sysdeps<Ftruncate>::operator()(int fd, size_t size) {
 
 int Sysdeps<Fsync>::operator()(int fd) { return moto_to_errno(moto_rt_fsync(fd)); }
 
+int Sysdeps<Fchmod>::operator()(int fd, mode_t mode) {
+	uint64_t perm = 0;
+	if (mode & 0444)
+		perm |= MOTO_PERM_READ;
+	if (mode & 0222)
+		perm |= MOTO_PERM_WRITE;
+	if (mode & 0111)
+		perm |= MOTO_PERM_EXEC;
+	return moto_to_errno(moto_rt_set_file_perm(fd, perm));
+}
+
 int Sysdeps<Access>::operator()(const char *path, int mode) {
 	moto_file_attr_t attr;
 	int32_t r =
@@ -387,8 +400,8 @@ int Sysdeps<Access>::operator()(const char *path, int mode) {
 		return EACCES;
 	if ((mode & W_OK) && !(attr.perm & MOTO_PERM_WRITE))
 		return EACCES;
-	// X_OK: directories are traversable; nothing else is executable via libc yet.
-	if ((mode & X_OK) && attr.file_type != MOTO_FILETYPE_DIRECTORY)
+	if ((mode & X_OK) && attr.file_type != MOTO_FILETYPE_DIRECTORY
+	    && !(attr.perm & MOTO_PERM_EXEC))
 		return EACCES;
 	return 0;
 }
