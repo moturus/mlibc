@@ -1251,6 +1251,12 @@ void processLateRelocation(Relocation rel) {
 }
 
 void processLateRelocations(SharedObject *object) {
+#if defined(__motor__) && MLIBC_STATIC_BUILD
+	// Motor rejects executable relocations that its loader cannot apply.
+	if(object->isMainObject)
+		return;
+#endif
+
 	frg::optional<uintptr_t> rel_offset;
 	frg::optional<size_t> rel_length;
 
@@ -2185,6 +2191,13 @@ void Loader::_processRelocations(Relocation &rel) {
 }
 
 void Loader::_processStaticRelocations(SharedObject *object) {
+#if defined(__motor__) && MLIBC_STATIC_BUILD
+	// Motor owns executable relocation, including on-demand page fills.
+	// Repeating it here would fault in pages the program might never touch.
+	if(object->isMainObject)
+		return;
+#endif
+
 	frg::optional<uintptr_t> rela_offset;
 	frg::optional<size_t> rela_length;
 
