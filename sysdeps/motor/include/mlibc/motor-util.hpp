@@ -28,6 +28,7 @@ inline int moto_to_errno(int64_t e) {
 	case 19: return ENOTCONN;   // NotConnected
 	case 20: return ENOSPC;     // StorageFull
 	case 21: return EIO;        // InvalidData
+	case 24: return EXDEV;      // CrossesDevices
 	default: return EIO;
 	}
 }
