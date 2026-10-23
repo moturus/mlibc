@@ -1,0 +1,27 @@
+[package]
+name = "moto-rt-cabi"
+authors = ["The Motor OS Project Developers"]
+license = "MIT OR Apache-2.0"
+keywords = ["motor", "motor-os"]
+description = "C-ABI surface over the Motor OS RT.VDSO, for mlibc & friends."
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+test = false
+
+[dependencies]
+# The libc feature supplies weak runtime symbols; mlibc's strong definitions win.
+moto-rt = { version = "0.17.9", features = ["libc"] }
+moto-sys = "0.3.2"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = "fat"
+strip = true
+codegen-units = 1
