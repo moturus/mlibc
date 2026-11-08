@@ -484,43 +484,6 @@ int Sysdeps<Pwrite>::operator()(int fd, const void *buf, size_t n, off_t off, ss
 	return 0;
 }
 
-// Motor spawns without fork (posix_spawn semantics are native). The shim
-// tracks children by pseudo-pid (>= 0x40000000). file_actions/attrs are not
-// supported (no fd inheritance control yet); the child inherits stdio + cwd.
-int Sysdeps<PosixSpawn>::operator()(pid_t *ret_pid, const char *path, int have_file_actions,
-                                    int have_attr, char *const argv[], char *const envp[]) {
-	if (have_file_actions || have_attr)
-		return ENOSYS;
-	int32_t pid;
-	int32_t r = moto_rt_spawn(reinterpret_cast<const uint8_t *>(path), strlen(path),
-	                          reinterpret_cast<const uint8_t *const *>(argv),
-	                          reinterpret_cast<const uint8_t *const *>(envp), &pid);
-	if (r < 0)
-		return moto_to_errno(r);
-	*ret_pid = pid;
-	return 0;
-}
-
-int Sysdeps<Waitpid>::operator()(pid_t pid, int *status, int flags, struct rusage *ru,
-                                 pid_t *ret_pid) {
-	if (pid <= 0)
-		return ECHILD; // no process groups / wait-for-any on Motor
-	if (flags)
-		return EINVAL; // no WNOHANG/WUNTRACED: waits are always blocking
-	if (ru)
-		memset(ru, 0, sizeof *ru);
-	int32_t exit_status;
-	int32_t r = moto_rt_waitpid(pid, &exit_status);
-	if (r == -MOTO_E_BAD_HANDLE)
-		return ECHILD; // not our child (or already reaped)
-	if (r < 0)
-		return moto_to_errno(r);
-	if (status)
-		*status = (exit_status & 0xff) << 8; // WIFEXITED encoding
-	*ret_pid = pid;
-	return 0;
-}
-
 int Sysdeps<Sysconf>::operator()(int num, long *ret) {
 	switch (num) {
 	case _SC_NPROCESSORS_ONLN:

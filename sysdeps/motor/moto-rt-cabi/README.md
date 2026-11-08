@@ -5,6 +5,11 @@ This Rust crate is part of mlibc's Motor OS port. It builds
 crates, and supplies `moto_rt.h`. It also owns emulated TLS and C++
 thread-local destructor registration. No Motor OS source checkout is needed.
 
+The shim also owns native C-library child handles. Spawn supports cwd, PATH
+lookup, stdio redirection and parent pipe descriptors. Wait supports specific
+children, any C-library child and nonblocking probes, with one reap per child
+and POSIX wait-status encoding.
+
 Use the Motor Rust toolchain selected by the toolchain builder, with its
 `bin` directory on `PATH` or selected through rustup. It must include
 `rust-src`. From this crate's directory, fetch the locked registry dependencies

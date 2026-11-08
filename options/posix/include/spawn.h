@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-typedef struct {
+typedef struct __mlibc_spawnattr {
 	int __flags;
 	pid_t __pgrp;
 	sigset_t __def, __mask;
@@ -20,7 +20,7 @@ typedef struct {
 	char __pad[64 - sizeof(void *)];
 } posix_spawnattr_t;
 
-typedef struct {
+typedef struct __mlibc_spawn_file_actions {
 	int __pad0[2];
 	void *__actions;
 	int __pad[16];
@@ -65,6 +65,8 @@ int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *__file_actions
 		int __fildes);
 int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t *__restrict __file_actions,
 		int __fildes, const char *__restrict __path, int __oflag, mode_t __mode);
+int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *__restrict __file_actions,
+		const char *__restrict __path);
 int posix_spawnp(pid_t *__restrict __pid, const char *__restrict __file,
 		const posix_spawn_file_actions_t *__file_actions,
 		const posix_spawnattr_t *__restrict __attrp,

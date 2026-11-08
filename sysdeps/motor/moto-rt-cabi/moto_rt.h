@@ -240,17 +240,33 @@ int32_t moto_rt_poll_wait(int32_t poll_fd, uint64_t timeout_nanos,
 /* process identity */
 int64_t moto_rt_getpid(void);
 
-/* process spawn/wait (M9b). Motor spawns without fork; children are tracked
- * by pseudo-pids >= 0x40000000 (real kernel pids stay below).
+/* Native spawn. Motor spawns without fork and returns real positive kernel
+ * pids, matching getpid() in the child.
  *   - argv: full POSIX argv, NULL-terminated; argv[0] is SKIPPED (Motor
  *     always sets the child's argv[0] to the resolved executable path).
  *   - envp: NULL-terminated array of "KEY=VALUE" strings; may be NULL.
- *   - the child inherits this process's stdio and cwd.
- * moto_rt_waitpid blocks until the child exits, then reaps it. */
-int32_t moto_rt_spawn(const uint8_t *prog, size_t prog_len,
-                      const uint8_t *const *argv, const uint8_t *const *envp,
-                      int32_t *pid_out);
-int32_t moto_rt_waitpid(int32_t pid, int32_t *exit_status);
+ *   - stdio accepts parent fd 0/1/2, regular file fds, or the directives
+ *     below. No arbitrary fd inheritance is implied. */
+#define MOTO_STDIO_INHERIT (-65536)
+#define MOTO_STDIO_NULL    (-65537)
+#define MOTO_STDIO_PIPE    (-65538)
+#define MOTO_SPAWN_SEARCH_PATH 1u
+#define MOTO_WAIT_NOHANG 1u
+typedef struct {
+    const char *program;
+    const char *const *argv;
+    const char *const *envp;
+    const char *cwd;  /* NULL = inherit; relative = resolve from parent cwd */
+    const char *path; /* NULL = Motor's default PATH */
+    int32_t stdio[3];
+    uint32_t flags;
+} moto_spawn_options_t;
+/* stdio_out, if non-NULL, receives three parent pipe fds (-1 when absent).
+ * It is required when requesting a pipe; the caller owns returned fds. */
+int32_t moto_rt_spawn_ex(const moto_spawn_options_t *options, int32_t *pid,
+                         int32_t *stdio_out);
+/* Returns reaped pid, zero for NOHANG, or -error; status is POSIX-encoded. */
+int32_t moto_rt_waitpid_ex(int32_t pid, uint32_t flags, int32_t *status);
 
 /* futex (u64 max timeout = infinite); 1 = woken, 0 = timed out */
 int32_t moto_rt_futex_wait(const uint32_t *addr, uint32_t expected,

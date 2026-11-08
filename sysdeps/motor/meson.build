@@ -13,12 +13,13 @@ rtld_include_dirs += include_directories('include')
 libc_sources += files(
 	'generic/entry.cpp',
 	'generic/poll.cpp',
+	'generic/process.cpp',
 	'generic/signals.cpp',
 	'generic/socket.cpp',
 	'generic/sysdeps.cpp',
 	'generic/thread.cpp',
 )
-libc_include_dirs += include_directories('include')
+libc_include_dirs += include_directories('include', 'moto-rt-cabi')
 # ANCHOR_END: sources-and-includes
 
 # ANCHOR: abi-includes

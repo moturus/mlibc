@@ -17,6 +17,7 @@ include!(concat!(env!("OUT_DIR"), "/rt_version.rs"));
 
 mod cxa;
 mod emutls;
+mod processes;
 
 use core::alloc::Layout;
 
@@ -751,123 +752,6 @@ pub unsafe extern "C" fn moto_rt_poll_wait(
 #[unsafe(no_mangle)]
 pub extern "C" fn moto_rt_getpid() -> i64 {
     moto_sys::current_pid() as i64
-}
-
-// ---- process spawn/wait (M9b) ----------------------------------------------------
-//
-// Motor spawns without fork, and native process management is by u64 handle;
-// POSIX wait takes a pid, so this table maps a child's pid to the handle the
-// runtime waits on. The pids here are the real kernel pids: system-wide
-// meaningful, matching what the child's own getpid() reports and what
-// sysbox/mdbg display.
-
-struct SpawnTable {
-    children: alloc::collections::BTreeMap<i32, u64>,
-}
-
-static SPAWN_TABLE: moto_rt::mutex::Mutex<SpawnTable> = moto_rt::mutex::Mutex::new(SpawnTable {
-    children: alloc::collections::BTreeMap::new(),
-});
-
-/// Walks a NULL-terminated array of NUL-terminated C strings.
-unsafe fn c_str_array(mut p: *const *const u8) -> alloc::vec::Vec<alloc::string::String> {
-    use alloc::borrow::ToOwned;
-    let mut result = alloc::vec::Vec::new();
-    if p.is_null() {
-        return result;
-    }
-    unsafe {
-        while !(*p).is_null() {
-            let cstr = core::ffi::CStr::from_ptr(*p as *const core::ffi::c_char);
-            if let Ok(s) = cstr.to_str() {
-                result.push(s.to_owned());
-            }
-            p = p.add(1);
-        }
-    }
-    result
-}
-
-/// Spawns `prog` with the child inheriting this process's stdio and cwd.
-/// `argv` is the full POSIX argv (NULL-terminated); argv[0] is skipped —
-/// Motor always sets the child's argv[0] to the resolved executable path.
-/// `envp` is a NULL-terminated array of "KEY=VALUE" strings (may be NULL).
-/// On success writes the child's pid and returns 0.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn moto_rt_spawn(
-    prog: *const u8,
-    prog_len: usize,
-    argv: *const *const u8,
-    envp: *const *const u8,
-    pid_out: *mut i32,
-) -> i32 {
-    let program = match str_arg(prog, prog_len) {
-        Ok(s) => s,
-        Err(e) => return e as i32,
-    };
-
-    let mut args = unsafe { c_str_array(argv) };
-    if !args.is_empty() {
-        args.remove(0); // argv[0]: Motor supplies the exe path itself
-    }
-
-    let mut env = alloc::vec::Vec::new();
-    for kv in unsafe { c_str_array(envp) } {
-        if let Some(eq) = kv.find('=') {
-            use alloc::borrow::ToOwned;
-            env.push((kv[..eq].to_owned(), kv[eq + 1..].to_owned()));
-        }
-    }
-
-    let spawn_args = moto_rt::process::SpawnArgs {
-        program: alloc::string::ToString::to_string(program),
-        args,
-        env,
-        cwd: None,
-        stdin: moto_rt::process::STDIO_INHERIT,
-        stdout: moto_rt::process::STDIO_INHERIT,
-        stderr: moto_rt::process::STDIO_INHERIT,
-    };
-
-    match moto_rt::process::spawn(spawn_args) {
-        Ok(res) => {
-            // STDIO_INHERIT produces no new fds, but close any that appear
-            // (defensive: a leaked pipe fd would never see EOF).
-            for fd in [res.stdin, res.stdout, res.stderr] {
-                if fd >= 0 {
-                    let _ = moto_rt::fs::close(fd);
-                }
-            }
-            // The kernel bounds pids to the i32-positive range.
-            assert!(res.pid > 0);
-            SPAWN_TABLE.lock().children.insert(res.pid, res.handle);
-            unsafe { *pid_out = res.pid };
-            0
-        }
-        Err(e) => err64(e) as i32,
-    }
-}
-
-/// Blocks until the child exits; writes its exit status and reaps it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn moto_rt_waitpid(pid: i32, exit_status: *mut i32) -> i32 {
-    let handle = {
-        let table = SPAWN_TABLE.lock();
-        match table.children.get(&pid) {
-            Some(h) => *h,
-            None => return err64(moto_rt::Error::BadHandle) as i32,
-        }
-    };
-
-    // Don't hold the lock across the blocking wait.
-    match moto_rt::process::wait(handle) {
-        Ok(status) => {
-            SPAWN_TABLE.lock().children.remove(&pid);
-            unsafe { *exit_status = status };
-            0
-        }
-        Err(e) => err64(e) as i32,
-    }
 }
 
 // ---- futex ----------------------------------------------------------------------

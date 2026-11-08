@@ -270,7 +270,7 @@ int system(const char *command) {
 		const char *args[] = {
 			"sh", "-c", "--", command, nullptr
 		};
-		if (int e = mlibc::sysdep<PosixSpawn>(&child, shell, 0, 0,
+		if (int e = mlibc::sysdep<PosixSpawn>(&child, shell, nullptr, nullptr,
 				const_cast<char **>(args), environ); e) {
 			errno = e;
 			return -1;

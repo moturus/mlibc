@@ -13,25 +13,7 @@
 #include <bits/ensure.h>
 #include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
-
-/*
- * Musl places this in a seperate header called fdop.h
- * This header isn't present in glibc, or on my host, so I
- * include it's contents here
- */
-
-#define FDOP_CLOSE 1
-#define FDOP_DUP2 2
-#define FDOP_OPEN 3
-#define FDOP_CHDIR 4
-#define FDOP_FCHDIR 5
-
-struct fdop {
-	struct fdop *next, *prev;
-	int cmd, fd, srcfd, oflag;
-	mode_t mode;
-	char path[];
-};
+#include <mlibc/spawn-actions.hpp>
 
 /*
  * This posix_spawn implementation is taken from musl
@@ -193,13 +175,9 @@ int posix_spawn(pid_t *__restrict res, const char *__restrict path,
 		const posix_spawn_file_actions_t *file_actions,
 		const posix_spawnattr_t *__restrict attrs,
 		char *const argv[], char *const envp[]) {
-	// Fork-less platforms spawn natively; the sysdep gets flags telling it
-	// whether non-trivial file_actions/attrs were requested (it returns
-	// ENOSYS if it cannot honor them).
+	// Fork-less platforms apply supported file actions in their native spawn.
 	if constexpr (mlibc::IsImplemented<PosixSpawn>) {
-		int have_fa = file_actions && file_actions->__actions;
-		int have_attr = attrs && attrs->__flags;
-		return mlibc::sysdep<PosixSpawn>(res, path, have_fa, have_attr,
+		return mlibc::sysdep<PosixSpawn>(res, path, file_actions, attrs,
 				argv, envp);
 	}
 
@@ -371,6 +349,21 @@ int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t *__restrict file
 		op->next->prev = op;
 	op->prev = nullptr;
 	file_actions->__actions = op;
+	return 0;
+}
+
+int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *actions,
+		const char *path) {
+	auto op = static_cast<fdop *>(malloc(sizeof(fdop) + strlen(path) + 1));
+	if (!op)
+		return ENOMEM;
+	op->cmd = FDOP_CHDIR;
+	op->fd = -1;
+	strcpy(op->path, path);
+	if ((op->next = static_cast<fdop *>(actions->__actions)))
+		op->next->prev = op;
+	op->prev = nullptr;
+	actions->__actions = op;
 	return 0;
 }
 
