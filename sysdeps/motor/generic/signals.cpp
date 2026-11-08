@@ -12,6 +12,7 @@
 #include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/lock.hpp>
+#include <mlibc/motor-util.hpp>
 #include <moto_rt.h>
 #include <signal.h>
 #include <string.h>
@@ -76,12 +77,16 @@ int Sysdeps<Sigprocmask>::operator()(int how, const sigset_t *__restrict set,
 
 int Sysdeps<Kill>::operator()(pid_t pid, int sig) {
 	pid_t self = static_cast<pid_t>(moto_rt_getpid());
-	if (sig == 0) // existence probe
-		return pid == self ? 0 : ESRCH;
-	if (sig < 1 || sig >= NSIG)
+	if (sig < 0 || sig >= NSIG)
 		return EINVAL;
-	if (pid != self)
-		return ESRCH; // no cross-process signals on Motor
+	if (pid != self) {
+		int r = moto_rt_kill(pid, sig);
+		if (r == -MOTO_E_NOT_FOUND || r == -MOTO_E_BAD_HANDLE)
+			return ESRCH;
+		return moto_to_errno(r);
+	}
+	if (sig == 0)
+		return 0;
 
 	// Synchronous self-delivery — the raise() path. The process mask is NOT
 	// consulted: nothing can be left pending, and abort() unblocks SIGABRT

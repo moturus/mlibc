@@ -8,7 +8,9 @@ thread-local destructor registration. No Motor OS source checkout is needed.
 The shim also owns native C-library child handles. Spawn supports cwd, PATH
 lookup, stdio redirection and parent pipe descriptors. Wait supports specific
 children, any C-library child and nonblocking probes, with one reap per child
-and POSIX wait-status encoding.
+and POSIX wait-status encoding. Signal 0, SIGTERM and SIGKILL use native process
+permissions; asynchronous signal-handler delivery and process groups are not
+emulated.
 
 Use the Motor Rust toolchain selected by the toolchain builder, with its
 `bin` directory on `PATH` or selected through rustup. It must include

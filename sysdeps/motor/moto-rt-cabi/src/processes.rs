@@ -1,6 +1,7 @@
 //! Native children shared by all C-library spawn, wait and popen callers.
 use alloc::{collections::BTreeMap, format, string::String, sync::Arc, vec::Vec};
 use core::ffi::{CStr, c_char};
+use core::sync::atomic::{AtomicI32, Ordering};
 use moto_rt::{Error, Result, fs, mutex::Mutex, poll, process};
 
 fn error(error: Error) -> i32 {
@@ -20,6 +21,7 @@ struct Child {
     readiness: NativeFd,
     pid: i32,
     handle: u64,
+    signal: AtomicI32,
 }
 impl Drop for Child {
     fn drop(&mut self) {
@@ -129,6 +131,7 @@ fn register(spawned: &process::SpawnResult) -> Result<()> {
         readiness: NativeFd(fd),
         pid: spawned.pid,
         handle: spawned.handle,
+        signal: AtomicI32::new(0),
     });
     let mut table = CHILDREN.lock();
     assert!(table.entries.insert(child.pid, child).is_none());
@@ -246,7 +249,12 @@ fn wait(pid: i32, nohang: bool) -> Result<(i32, i32)> {
             match fs::read(child.readiness.0, &mut bytes) {
                 Ok(8) => {
                     let raw = u64::from_ne_bytes(bytes);
-                    let status = ((raw as i32) & 255) << 8;
+                    let signal = child.signal.load(Ordering::Relaxed);
+                    let status = if signal != 0 {
+                        signal
+                    } else {
+                        ((raw as i32) & 255) << 8
+                    };
                     table.entries.remove(id);
                     table.notify();
                     return Ok((*id, status));
@@ -299,4 +307,44 @@ pub unsafe extern "C" fn moto_rt_waitpid_ex(pid: i32, flags: u32, status: *mut i
         }
         Err(err) => error(err),
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn moto_rt_kill(pid: i32, signal: i32) -> i32 {
+    let result = (|| {
+        if pid <= 0 {
+            return Err(Error::InvalidArgument);
+        }
+        if signal != 0 && signal != 9 && signal != 15 {
+            return Err(Error::NotImplemented);
+        }
+        let table = CHILDREN.lock();
+        if let Some(child) = table.entries.get(&pid) {
+            if moto_sys::SysRay::process_status(child.handle.into())
+                .map_err(Error::from)?
+                .is_some()
+            {
+                return Err(Error::NotFound);
+            }
+            if signal != 0 {
+                process::kill(child.handle)?;
+                child.signal.store(signal, Ordering::Relaxed);
+            }
+            return Ok(());
+        }
+        drop(table);
+        if signal == 0 {
+            let mut info = [moto_sys::stats::ProcessInfoV1::default()];
+            let count =
+                moto_sys::stats::ProcessInfoV1::list(pid as u64, &mut info).map_err(Error::from)?;
+            if count == 1 && info[0].pid == pid as u64 && info[0].active != 0 {
+                Ok(())
+            } else {
+                Err(Error::NotFound)
+            }
+        } else {
+            moto_sys::SysCpu::kill_pid(pid as u64).map_err(Error::from)
+        }
+    })();
+    result.map_or_else(error, |()| 0)
 }

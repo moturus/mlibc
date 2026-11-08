@@ -267,6 +267,7 @@ int32_t moto_rt_spawn_ex(const moto_spawn_options_t *options, int32_t *pid,
                          int32_t *stdio_out);
 /* Returns reaped pid, zero for NOHANG, or -error; status is POSIX-encoded. */
 int32_t moto_rt_waitpid_ex(int32_t pid, uint32_t flags, int32_t *status);
+int32_t moto_rt_kill(int32_t pid, int32_t signal); /* 0, SIGTERM, SIGKILL */
 
 /* futex (u64 max timeout = infinite); 1 = woken, 0 = timed out */
 int32_t moto_rt_futex_wait(const uint32_t *addr, uint32_t expected,
