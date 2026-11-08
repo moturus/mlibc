@@ -89,4 +89,25 @@ int Sysdeps<Waitpid>::operator()(pid_t pid, int *status, int flags,
 	return 0;
 }
 
+int motor_popen(const char *command, const char *type, int *fd, pid_t *pid) {
+	if (!type || (type[0] != 'r' && type[0] != 'w')
+			|| (type[1] && (type[1] != 'e' || type[2])))
+		return EINVAL;
+	const char *args[] = {"rush", "-c", command, nullptr};
+	bool writing = type[0] == 'w';
+	moto_spawn_options_t options = {
+		.program = "/system/bin/rush", .argv = args, .envp = environ,
+		.cwd = nullptr, .path = nullptr,
+		.stdio = {writing ? MOTO_STDIO_PIPE : MOTO_STDIO_INHERIT,
+			writing ? MOTO_STDIO_INHERIT : MOTO_STDIO_PIPE, MOTO_STDIO_INHERIT},
+		.flags = 0,
+	};
+	int32_t child, fds[3];
+	int r = moto_rt_spawn_ex(&options, &child, fds);
+	if (r < 0) return moto_to_errno(r);
+	*fd = fds[writing ? 0 : 1];
+	*pid = child;
+	return 0;
+}
+
 } // namespace mlibc

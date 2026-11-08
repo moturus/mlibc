@@ -14,6 +14,9 @@
 #include <mlibc/debug.hpp>
 #include <mlibc/file-io.hpp>
 #include <mlibc/posix-file-io.hpp>
+#ifdef __motor__
+#include <mlibc/motor-util.hpp>
+#endif
 
 struct popen_file : mlibc::fd_file {
 	popen_file(int fd, void (*do_dispose)(abstract_file *) = nullptr)
@@ -58,6 +61,18 @@ int pclose(FILE *stream) {
 }
 
 FILE *popen(const char *command, const char *typestr) {
+#ifdef __motor__
+	int fd;
+	pid_t pid;
+	if (int e = mlibc::motor_popen(command, typestr, &fd, &pid); e) {
+		errno = e;
+		return nullptr;
+	}
+	auto file = frg::construct<popen_file>(getAllocator(), fd,
+			mlibc::file_dispose_cb<popen_file>);
+	file->set_popen_pid(pid);
+	return file;
+#else
 	bool is_write;
 	pid_t child;
 	FILE *ret = nullptr;
@@ -159,6 +174,7 @@ FILE *popen(const char *command, const char *typestr) {
 	mlibc::sysdep_or_panic<Sigprocmask>(SIG_SETMASK, &old_mask, nullptr);
 
 	return ret;
+#endif
 }
 
 FILE *open_memstream(char **buf, size_t *sizeloc) {

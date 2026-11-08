@@ -3,9 +3,13 @@
 // Shared Motor-port helpers (used by generic/sysdeps.cpp and generic/thread.cpp).
 
 #include <abi-bits/errno.h>
+#include <abi-bits/pid_t.h>
 #include <stdint.h>
 
 namespace mlibc {
+
+// Runs command under the shell with a pipe to the child. Returns 0 or an errno.
+int motor_popen(const char *command, const char *type, int *fd, pid_t *pid);
 
 // moto ErrorCode (moto-rt/src/error.rs) -> Linux errno. Keep in sync.
 inline int moto_to_errno(int64_t e) {
