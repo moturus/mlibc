@@ -392,35 +392,25 @@ void qsort_r(void *base, size_t count, size_t size,
 		}
 	};
 
-	// Partition the range [begin, end) and return the position of the pivot.
-	auto partition = [&] (size_t begin, size_t end) -> size_t {
-		__ensure(begin < end);
-		// Invariant: every element before i is compares smaller or equal to the pivot.
-		auto pivot = end - 1;
-		size_t i = begin;
-		for (size_t j = begin; j < pivot; ++j) {
-			if (compare_idx(j, pivot) <= 0) {
-				swap_idx(i, j);
-				++i;
-			}
+	// Iterative heapsort bounds stack use and handles ordered or equal inputs in O(n log n).
+	auto sift_down = [&] (size_t root, size_t end) {
+		while (root < end / 2) {
+			auto child = root * 2 + 1;
+			if (child + 1 < end && compare_idx(child, child + 1) < 0)
+				++child;
+			if (compare_idx(root, child) >= 0)
+				return;
+			swap_idx(root, child);
+			root = child;
 		}
-		swap_idx(i, pivot);
-		return i;
 	};
 
-	// Sort the range [begin, end).
-	// TODO: If we are doing more than C * log_2(n) iterations for some C,
-	//       fall back to a guaranteed O(log n) implementation.
-	auto quick_sort = [&] (this auto self, size_t begin, size_t end) {
-		__ensure(begin <= end);
-		if (end - begin <= 1)
-			return;
-		auto pivot = partition(begin, end);
-		self(begin, pivot);
-		self(pivot + 1, end);
-	};
-
-	quick_sort(0, count);
+	for (size_t root = count / 2; root > 0; --root)
+		sift_down(root - 1, count);
+	for (size_t end = count; end > 1; --end) {
+		swap_idx(0, end - 1);
+		sift_down(0, end - 1);
+	}
 }
 
 int abs(int num) {
