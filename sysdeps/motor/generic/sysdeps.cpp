@@ -159,7 +159,18 @@ int Sysdeps<VmUnmap>::operator()(void *pointer, size_t size) {
 	return sysdep<AnonFree>(pointer, size);
 }
 
-int Sysdeps<Open>::operator()(const char *pathname, int flags, mode_t, int *fd) {
+int Sysdeps<Open>::operator()(const char *pathname, int flags, mode_t mode, int *fd) {
+	// Motor files have no create-time mode, but a new file that asks to stay
+	// writable and executable can get there through Fchmod. Only a file this
+	// call creates takes the mode.
+	bool set_mode = false;
+	if ((flags & O_CREAT) && (mode & 0111) && (mode & 0222)) {
+		moto_file_attr_t attr{};
+		attr.version = 2;
+		set_mode = (flags & O_EXCL)
+			|| moto_rt_stat(reinterpret_cast<const uint8_t *>(pathname), strlen(pathname), &attr)
+				== -MOTO_E_NOT_FOUND;
+	}
 	uint32_t opts = 0;
 	switch (flags & O_ACCMODE) {
 	case O_RDONLY: opts = MOTO_O_READ; break;
@@ -176,6 +187,12 @@ int Sysdeps<Open>::operator()(const char *pathname, int flags, mode_t, int *fd) 
 	                         strlen(pathname), opts);
 	if (r < 0)
 		return moto_to_errno(r);
+	if (set_mode) {
+		if (int e = sysdep<Fchmod>(static_cast<int>(r), mode); e) {
+			moto_rt_close(static_cast<int32_t>(r));
+			return e;
+		}
+	}
 	*fd = static_cast<int>(r);
 	return 0;
 }
@@ -389,7 +406,14 @@ int Sysdeps<Fchmod>::operator()(int fd, mode_t mode) {
 		perm |= MOTO_PERM_WRITE;
 	if (mode & 0111)
 		perm |= MOTO_PERM_EXEC;
-	return moto_to_errno(moto_rt_set_file_perm(fd, perm));
+	int32_t r = moto_rt_set_file_perm(fd, perm);
+	// A role cannot widen its own rw- to rwx directly; it must go through r-x.
+	if (r == -MOTO_E_NOT_ALLOWED && perm == (MOTO_PERM_READ | MOTO_PERM_WRITE | MOTO_PERM_EXEC)) {
+		r = moto_rt_set_file_perm(fd, MOTO_PERM_READ | MOTO_PERM_EXEC);
+		if (r == 0)
+			r = moto_rt_set_file_perm(fd, perm);
+	}
+	return moto_to_errno(r);
 }
 
 int Sysdeps<Access>::operator()(const char *path, int mode) {
