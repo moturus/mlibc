@@ -216,12 +216,14 @@ int Sysdeps<Seek>::operator()(int fd, off_t offset, int whence, off_t *new_offse
 	}
 	int64_t r = moto_rt_seek(fd, offset, w);
 	if (r < 0) {
-		// The VDSO's seek returns BadHandle (17) for any open fd that is not
-		// a regular file (rt.vdso/src/rt_fs.rs downcast) — for the stdio fds,
-		// which always exist on Motor, that means "non-seekable stream", which
-		// POSIX (and mlibc's fd_file::determine_type) spells ESPIPE.
-		if (-r == 17 /* BadHandle */ && fd >= 0 && fd <= 2)
-			return ESPIPE;
+		// VDSO seek also returns BadHandle for valid non-file descriptors.
+		// Distinguish streams from invalid fds for stdio's type detection.
+		if (r == -MOTO_E_BAD_HANDLE) {
+			moto_file_attr_t attr{};
+			attr.version = 2;
+			if (!moto_rt_fstat(fd, &attr) && attr.file_type != MOTO_FILETYPE_FILE)
+				return ESPIPE;
+		}
 		return moto_to_errno(r);
 	}
 	*new_offset = r;
