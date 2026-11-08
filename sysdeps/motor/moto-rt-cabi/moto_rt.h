@@ -269,6 +269,12 @@ int32_t moto_rt_spawn_ex(const moto_spawn_options_t *options, int32_t *pid,
 int32_t moto_rt_waitpid_ex(int32_t pid, uint32_t flags, int32_t *status);
 int32_t moto_rt_kill(int32_t pid, int32_t signal); /* 0, SIGTERM, SIGKILL */
 
+/* Lazy executable-path cache. Initialize before changing cwd if native argv[0]
+ * may be relative. No partial writes: *size is capacity on input and pathname
+ * byte length excluding NUL on success. Both calls return 0 or -error. */
+int32_t moto_rt_exepath_init(void);
+int32_t moto_rt_exepath(uint8_t *buffer, size_t *size);
+
 /* futex (u64 max timeout = infinite); 1 = woken, 0 = timed out */
 int32_t moto_rt_futex_wait(const uint32_t *addr, uint32_t expected,
                            uint64_t timeout_nanos);

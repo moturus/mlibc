@@ -12,6 +12,11 @@ and POSIX wait-status encoding. Signal 0, SIGTERM and SIGKILL use native process
 permissions; asynchronous signal-handler delivery and process groups are not
 emulated.
 
+Executable-path discovery is lazy. Call `moto_rt_exepath_init()` before a cwd
+change when argv[0] may be relative; `moto_rt_exepath()` then returns the cached
+absolute path without partial buffer writes. Applications build no additional
+Rust library to use these interfaces.
+
 Use the Motor Rust toolchain selected by the toolchain builder, with its
 `bin` directory on `PATH` or selected through rustup. It must include
 `rust-src`. From this crate's directory, fetch the locked registry dependencies

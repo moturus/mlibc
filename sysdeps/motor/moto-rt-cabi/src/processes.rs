@@ -348,3 +348,44 @@ pub extern "C" fn moto_rt_kill(pid: i32, signal: i32) -> i32 {
     })();
     result.map_or_else(error, |()| 0)
 }
+
+static EXECUTABLE_PATH: Mutex<Option<Result<String>>> = Mutex::new(None);
+
+#[unsafe(no_mangle)]
+pub extern "C" fn moto_rt_exepath_init() -> i32 {
+    let mut cached = EXECUTABLE_PATH.lock();
+    match cached.get_or_insert_with(|| {
+        let path = process::current_exe()?;
+        if path.starts_with('/') {
+            Ok(path)
+        } else {
+            fs::canonicalize(&path)
+        }
+    }) {
+        Ok(_) => 0,
+        Err(err) => error(*err),
+    }
+}
+
+/// Capacity on input, byte count excluding NUL on success; no partial writes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn moto_rt_exepath(buffer: *mut u8, size: *mut usize) -> i32 {
+    if buffer.is_null() || size.is_null() {
+        return error(Error::InvalidArgument);
+    }
+    let initialized = moto_rt_exepath_init();
+    if initialized < 0 {
+        return initialized;
+    }
+    let cached = EXECUTABLE_PATH.lock();
+    let bytes = cached.as_ref().unwrap().as_ref().unwrap().as_bytes();
+    if bytes.len() >= unsafe { *size } {
+        return error(Error::InvalidArgument);
+    }
+    unsafe {
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer, bytes.len());
+        buffer.add(bytes.len()).write(0);
+        *size = bytes.len();
+    }
+    0
+}
