@@ -96,7 +96,7 @@ int motor_popen(const char *command, const char *type, int *fd, pid_t *pid) {
 	const char *args[] = {"rush", "-c", command, nullptr};
 	bool writing = type[0] == 'w';
 	moto_spawn_options_t options = {
-		.program = "/system/bin/rush", .argv = args, .envp = environ,
+		.program = "/user/bin/rush", .argv = args, .envp = environ,
 		.cwd = nullptr, .path = nullptr,
 		.stdio = {writing ? MOTO_STDIO_PIPE : MOTO_STDIO_INHERIT,
 			writing ? MOTO_STDIO_INHERIT : MOTO_STDIO_PIPE, MOTO_STDIO_INHERIT},

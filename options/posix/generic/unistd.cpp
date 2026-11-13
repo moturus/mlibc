@@ -67,7 +67,7 @@ size_t confstr(int name, char *buf, size_t len) {
 	const char *str = "";
 	if (name == _CS_PATH) {
 #ifdef __motor__
-		str = "/system/bin:/user/bin";
+		str = "/user/bin";
 #else
 		str = "/bin:/usr/bin";
 #endif
@@ -183,7 +183,7 @@ int execvpe(const char *file, char *const argv[], char *const envp[]) {
 		dirs = pv;
 	}else{
 #ifdef __motor__
-		dirs = "/system/bin:/user/bin";
+		dirs = "/user/bin";
 #else
 		dirs = "/bin:/usr/bin";
 #endif
@@ -1443,7 +1443,7 @@ namespace {
 				// if the file cannot be opened, we need to pretend one exists with
 				// these shells:
 #ifdef __motor__
-				static char shells[] = "/system/bin/sh\n/system/bin/rush\n";
+				static char shells[] = "/user/bin/sh\n/user/bin/rush\n";
 #else
 				static char shells[] = "/bin/sh\n/bin/csh\n";
 #endif

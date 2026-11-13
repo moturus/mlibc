@@ -263,7 +263,7 @@ int system(const char *command) {
 	if constexpr (mlibc::IsImplemented<PosixSpawn> && mlibc::IsImplemented<Waitpid>
 	              && !mlibc::IsImplemented<Fork>) {
 #ifdef __motor__
-		const char *shell = "/system/bin/rush";
+		const char *shell = "/user/bin/rush";
 #else
 		const char *shell = "/bin/sh";
 #endif

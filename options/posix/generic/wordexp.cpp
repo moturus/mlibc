@@ -39,7 +39,7 @@
 #include <stdint.h>
 
 #ifdef __motor__
-#define SHELL_PATH "/system/bin/sh"
+#define SHELL_PATH "/user/bin/sh"
 #else
 #define SHELL_PATH "/bin/sh"
 #endif

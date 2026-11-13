@@ -154,7 +154,7 @@ unsafe fn spawn(options: &SpawnOptions) -> Result<process::SpawnResult> {
         cwd
     };
     let path = if options.path.is_null() {
-        "/system/bin:/user/bin:/devtools/bin"
+        "/user/bin:/user/bin/dev"
     } else {
         unsafe { text(options.path)? }
     };

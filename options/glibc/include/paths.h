@@ -5,9 +5,9 @@
 #define _PATHS_H
 
 #ifdef __motor__
-#define	_PATH_DEFPATH "/system/bin:/user/bin"
-#define	_PATH_STDPATH "/system/bin:/user/bin"
-#define	_PATH_BSHELL	"/system/bin/sh"
+#define	_PATH_DEFPATH "/user/bin"
+#define	_PATH_STDPATH "/user/bin"
+#define	_PATH_BSHELL	"/user/bin/sh"
 #else
 #define	_PATH_DEFPATH "/usr/local/bin:/bin:/usr/bin"
 #define	_PATH_STDPATH "/bin:/usr/bin:/sbin:/usr/sbin"
